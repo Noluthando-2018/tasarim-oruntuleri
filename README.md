@@ -242,11 +242,11 @@ Requires Python 3.
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/tasarim-oruntuleri.git
+git clone https://github.com/Noluthando-2018/tasarim-oruntuleri.git
 cd tasarim-oruntuleri
 
 # Run the project
-python src/main.py
+python -m src/main.py
 ```
 
 ---
