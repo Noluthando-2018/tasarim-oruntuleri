@@ -1,13 +1,20 @@
+from src.cart.cart_base import CartBase
 from src.discounts.discount_strategy import DiscountStrategy
+from src.notifications.order_publisher import OrderEventPublisher
 
 
-class ShoppingCart:
+class ShoppingCart(CartBase):
 
-    def __init__(self, discount: DiscountStrategy):
+    def __init__(self, discount: DiscountStrategy, publisher: OrderEventPublisher):
         self._discount = discount
+        self._publisher = publisher
         self._items = []
         self._coupon_code = None
         self._log_history = []
+
+    def set_strategy(self, discount: DiscountStrategy):
+        """Swap discount strategy at runtime — OCP in action."""
+        self._discount = discount
 
     def add_item(self, name: str, price: float, quantity: int, category: str):
         self._items.append({
@@ -18,17 +25,13 @@ class ShoppingCart:
         })
         self._log_history.append(f"Added {name} x{quantity}")
 
-    def remove_item(self, name: str):
-        self._items = [i for i in self._items if i["name"] != name]
-        self._log_history.append(f"Removed {name}")
-
     def apply_coupon(self, code: str):
         self._coupon_code = code
 
     def _get_subtotal(self) -> float:
         return sum(i["price"] * i["quantity"] for i in self._items)
 
-    def calculate_total(self) -> float:
+    def get_total(self) -> float:
         total = self._get_subtotal()
         total = self._discount.apply(total)
 
@@ -39,37 +42,27 @@ class ShoppingCart:
 
         electronics_total = sum(
             i["price"] * i["quantity"]
-            for i in self._items
-            if i["category"] == "electronics"
+            for i in self._items if i["category"] == "electronics"
         )
         if electronics_total > 500:
             total -= 50
 
         return total
 
-    def get_shipping_cost(self) -> float:
-        subtotal = self._get_subtotal()
-        if self._coupon_code == "FREESHIP":
-            return 0.0
-        if subtotal > 100:
-            return 0.0
-        if subtotal > 50:
-            return 4.99
-        return 9.99
+    def get_description(self) -> str:
+        lines = [f"  {i['name']} x{i['quantity']} — ${i['price'] * i['quantity']:.2f}"
+                 for i in self._items]
+        return "\n".join(lines)
 
-    def send_order_confirmation(self, email: str):
-        total = self.calculate_total()
-        print(f"[EMAIL] Sending to {email}: Your order total is ${total:.2f}")
-
-    def print_receipt(self):
-        print("=== RECEIPT ===")
-        for item in self._items:
-            line_total = item["price"] * item["quantity"]
-            print(f"  {item['name']} x{item['quantity']} — ${line_total:.2f}")
-        print(f"Subtotal : ${self._get_subtotal():.2f}")
-        print(f"Shipping : ${self.get_shipping_cost():.2f}")
-        print(f"Total    : ${self.calculate_total():.2f}")
-        print("===============")
+    def place_order(self, email: str):
+        total = self.get_total()
+        self._publisher.notify({
+            "email": email,
+            "total": total,
+            "item_count": len(self._items),
+            "strategy": type(self._discount).__name__
+        })
+        self._log_history.append(f"Order placed for {email}, total ${total:.2f}")
 
     def get_log(self):
         return self._log_history
