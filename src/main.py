@@ -1,36 +1,36 @@
 from src.discounts.discount_factory import DiscountFactory, UserType
+from src.discounts.discount_strategy import FlashSaleStrategy, LoyaltyPointsStrategy
 from src.shopping_cart import ShoppingCart
-from src.cart.cart_decorators import GiftWrapDecorator, InsuranceDecorator
-from src.checkout.checkout_facade import CheckoutFacade
+from src.notifications.order_publisher import OrderEventPublisher
+from src.notifications.notifiers import EmailNotifier, SMSNotifier, OrderLoggerObserver
 
 
-def email_notifier(email: str, total: float):
-    print(f"[EMAIL] Sending to {email}: Your order total is ${total:.2f}")
+# Set up Observer
+publisher = OrderEventPublisher()
+publisher.subscribe(EmailNotifier())
+publisher.subscribe(SMSNotifier())
+publisher.subscribe(OrderLoggerObserver())
 
-
-def sms_notifier(email: str, total: float):
-    print(f"[SMS] Notifying {email}: Order confirmed, total ${total:.2f}")
-
-
-# Build the cart
+# Build cart
 vip_discount = DiscountFactory.get_discount(UserType.VIP)
-cart = ShoppingCart(discount=vip_discount)
+cart = ShoppingCart(discount=vip_discount, publisher=publisher)
+
 cart.add_item("Laptop", 999.99, 1, "electronics")
 cart.add_item("Mouse", 29.99, 2, "electronics")
 cart.add_item("Notebook", 4.99, 5, "stationery")
-cart.apply_coupon("SAVE10")
 
-# Wrap with decorators
-cart_with_giftwrap = GiftWrapDecorator(cart)
-cart_with_insurance = InsuranceDecorator(cart_with_giftwrap)
+print("=== ORDER 1: VIP discount ===")
+cart.place_order("user@example.com")
 
-print("Cart description:")
-print(cart_with_insurance.get_description())
 print()
+print("=== ORDER 2: Flash Sale — strategy swapped at runtime ===")
+cart.set_strategy(FlashSaleStrategy())
+cart.place_order("user@example.com")
 
-# Checkout via Facade
-facade = CheckoutFacade(
-    cart=cart_with_insurance,
-    notifiers=[email_notifier, sms_notifier]
-)
-facade.checkout(email="user@example.com", coupon_code="SAVE10")
+print()
+print("=== ORDER 3: Loyalty Points strategy ===")
+cart.set_strategy(LoyaltyPointsStrategy())
+cart.place_order("user@example.com")
+
+print()
+print("Log:", cart.get_log())

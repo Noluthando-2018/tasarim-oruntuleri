@@ -1,14 +1,20 @@
 from src.cart.cart_base import CartBase
 from src.discounts.discount_strategy import DiscountStrategy
+from src.notifications.order_publisher import OrderEventPublisher
 
 
 class ShoppingCart(CartBase):
 
-    def __init__(self, discount: DiscountStrategy):
+    def __init__(self, discount: DiscountStrategy, publisher: OrderEventPublisher):
         self._discount = discount
+        self._publisher = publisher
         self._items = []
         self._coupon_code = None
         self._log_history = []
+
+    def set_strategy(self, discount: DiscountStrategy):
+        """Swap discount strategy at runtime — OCP in action."""
+        self._discount = discount
 
     def add_item(self, name: str, price: float, quantity: int, category: str):
         self._items.append({
@@ -47,6 +53,16 @@ class ShoppingCart(CartBase):
         lines = [f"  {i['name']} x{i['quantity']} — ${i['price'] * i['quantity']:.2f}"
                  for i in self._items]
         return "\n".join(lines)
+
+    def place_order(self, email: str):
+        total = self.get_total()
+        self._publisher.notify({
+            "email": email,
+            "total": total,
+            "item_count": len(self._items),
+            "strategy": type(self._discount).__name__
+        })
+        self._log_history.append(f"Order placed for {email}, total ${total:.2f}")
 
     def get_log(self):
         return self._log_history
